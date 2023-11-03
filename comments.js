@@ -1,64 +1,47 @@
-// create a wecserver and listen to port 3000
-const express = require('express');
-const bodyParser = require('body-parser');
-const mongoose = require('mongoose');
-const Comment = require('./models/comment');
-const app = express();
+// Create web server
+var http = require('http');
+var fs = require('fs');
+var qs = require('querystring');
+var url = require('url');
 
-// connect to mongodb
-mongoose.connect('mongodb://localhost:27017/comments', {
-    useNewUrlParser: true,
-    useUnifiedTopology: true
-}).then(() => {
-    console.log('Connected to mongodb successfully!');
-}).catch(err => {
-    console.error(err);
-    process.exit(1);
+var comments = [];
+
+var server = http.createServer(function (request, response) {
+    var parsed = url.parse(request.url);
+    if (parsed.pathname == "/comment") {
+        if (request.method == "POST") {
+            var body = '';
+            request.on('data', function (data) {
+                body += data;
+                if (body.length > 1e6) {
+                    request.connection.destroy();
+                }
+            });
+            request.on('end', function () {
+                var post = qs.parse(body);
+                comments.push(post.comment);
+                console.log(comments);
+                response.writeHead(200, { 'Content-Type': 'text/html' });
+                response.end('Thank you for your comment!');
+            });
+        } else {
+            var html = fs.readFileSync('comments.html');
+            response.writeHead(200, { 'Content-Type': 'text/html' });
+            response.end(html);
+        }
+    } else if (parsed.pathname == "/view") {
+        var html = "<html><head><title>View Comments</title></head><body><h1>View Comments</h1><ul>";
+        for (var i = 0; i < comments.length; i++) {
+            html += "<li>" + comments[i] + "</li>";
+        }
+        html += "</ul></body></html>";
+        response.writeHead(200, { 'Content-Type': 'text/html' });
+        response.end(html);
+    } else {
+        response.writeHead(404, { 'Content-Type': 'text/html' });
+        response.end("Not found");
+    }
 });
 
-// use body parser
-app.use(bodyParser.json());
-
-// GET /comments
-app.get('/comments', async (req, res) => {
-    const comments = await Comment.find();
-    res.json(comments);
-});
-
-// POST /comments
-app.post('/comments', async (req, res) => {
-    const comment = new Comment(req.body);
-    const savedComment = await comment.save();
-    res.json(savedComment);
-});
-
-// GET /comments/:id
-app.get('/comments/:id', async (req, res) => {
-    const comment = await Comment.findById(req.params.id);
-    res.json(comment);
-});
-
-// PUT /comments/:id
-app.put('/comments/:id', async (req, res) => {
-    const comment = await Comment.findByIdAndUpdate(req.params.id, req.body);
-    res.json(comment);
-});
-
-// DELETE /comments/:id
-app.delete('/comments/:id', async (req, res) => {
-    const comment = await Comment.findByIdAndRemove(req.params.id);
-    res.json(comment);
-});
-
-// start the server
-app.listen(3000, () => {
-    console.log('Server started on port 3000');
-});
-
-
-
-
-
-
-
-
+server.listen(8080);
+console.log('Server is listening');
